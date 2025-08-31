@@ -1,36 +1,57 @@
-version: "3.9"
+version: '3.8'
 
 services:
-  mongo:
+  mongodb:
     image: mongo:6.0
-    container_name: genai_mongo
+    container_name: recommendation_mongodb
     restart: always
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: password123
     ports:
       - "27017:27017"
     volumes:
-      - mongo_data:/data/db
+      - mongodb_data:/data/db
+      - ./data/init:/docker-entrypoint-initdb.d
+    networks:
+      - recommendation_network
+
+  mongo-express:
+    image: mongo-express:latest
+    container_name: recommendation_mongo_express
+    restart: always
+    environment:
+      ME_CONFIG_MONGODB_ADMINUSERNAME: admin
+      ME_CONFIG_MONGODB_ADMINPASSWORD: password123
+      ME_CONFIG_MONGODB_URL: mongodb://admin:password123@mongodb:27017/
+      ME_CONFIG_BASICAUTH_USERNAME: admin
+      ME_CONFIG_BASICAUTH_PASSWORD: password123
+    ports:
+      - "8081:8081"
+    depends_on:
+      - mongodb
+    networks:
+      - recommendation_network
 
   backend:
     build: ./backend
-    container_name: genai_backend
+    container_name: recommendation_backend
     restart: always
+    environment:
+      MONGODB_URL: mongodb://admin:password123@mongodb:27017/
     ports:
       - "8000:8000"
-    environment:
-      - MONGO_URI=mongodb://mongo:27017/genai_db
     depends_on:
-      - mongo
-
-  frontend:
-    build: ./frontend
-    container_name: genai_frontend
-    restart: always
-    ports:
-      - "8501:8501"
-    environment:
-      - BACKEND_URL=http://backend:8000
-    depends_on:
-      - backend
+      - mongodb
+    networks:
+      - recommendation_network
+    volumes:
+      - ./backend:/app
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
 volumes:
-  mongo_data:
+  mongodb_data:
+
+networks:
+  recommendation_network:
+    driver: bridge
